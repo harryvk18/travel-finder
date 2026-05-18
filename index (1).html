@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Travel Finder — Multimodal Route Optimizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0a0a;
+    --surface:  #111111;
+    --border:   #1e1e1e;
+    --border2:  #2a2a2a;
+    --text:     #e8e8e8;
+    --muted:    #555;
+    --accent:   #e8ff47;   /* acid yellow — single vivid colour */
+    --accent2:  #ff6b35;   /* orange for highlights */
+    --mono:     'Space Mono', monospace;
+    --display:  'Bebas Neue', sans-serif;
+    --body:     'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ─── NOISE OVERLAY ─────────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.5;
+  }
+
+  /* ─── LAYOUT ────────────────────────────────────────────────── */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  /* ─── TICKER ────────────────────────────────────────────────── */
+  .ticker {
+    background: var(--accent);
+    color: #000;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 6px 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .ticker-inner {
+    display: inline-block;
+    animation: ticker 28s linear infinite;
+  }
+  .ticker-inner span { margin: 0 48px; }
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* ─── NAV ───────────────────────────────────────────────────── */
+  nav {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+  }
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    font-family: var(--display);
+    font-size: 26px;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .logo span { color: var(--accent); }
+  .nav-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    border: 1px solid var(--border2);
+    padding: 4px 10px;
+  }
+
+  /* ─── HERO ──────────────────────────────────────────────────── */
+  .hero {
+    padding: 80px 0 64px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .hero-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.1s;
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(56px, 8vw, 110px);
+    line-height: 0.92;
+    letter-spacing: 0.01em;
+    color: var(--text);
+    margin-bottom: 32px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 0.2s;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .hero-sub {
+    font-size: 17px;
+    font-weight: 300;
+    color: #888;
+    max-width: 560px;
+    line-height: 1.7;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 0.35s;
+  }
+  .hero-sub strong { color: var(--text); font-weight: 500; }
+
+  /* ─── DEPARTURE BOARD ───────────────────────────────────────── */
+  .board {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    font-family: var(--mono);
+    font-size: 13px;
+    overflow: hidden;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 0.5s;
+    max-width: 760px;
+  }
+  .board-header {
+    background: var(--border2);
+    display: grid;
+    grid-template-columns: 80px 1fr 120px 80px 140px;
+    padding: 10px 20px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .board-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 120px 80px 140px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    align-items: center;
+    transition: background 0.15s;
+  }
+  .board-row:hover { background: #161616; }
+  .board-row .price { color: var(--accent); font-weight: 700; }
+  .board-row .route { color: var(--text); }
+  .board-row .platform {
+    color: var(--accent2);
+    font-size: 11px;
+  }
+  .board-row .mode {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .board-row .saving {
+    background: rgba(232,255,71,0.08);
+    color: var(--accent);
+    font-size: 10px;
+    padding: 2px 7px;
+    letter-spacing: 0.06em;
+    display: inline-block;
+  }
+
+  /* ─── STATS ROW ─────────────────────────────────────────────── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid var(--border);
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 0.6s;
+  }
+  .stat {
+    padding: 40px 32px;
+    border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+  .stat-num {
+    font-family: var(--display);
+    font-size: 56px;
+    line-height: 1;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .stat-num span { color: var(--accent); }
+  .stat-label {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  /* ─── HOW IT WORKS ──────────────────────────────────────────── */
+  .section {
+    padding: 80px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 48px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border2);
+  }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+  }
+  .step {
+    padding: 32px;
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+  .step:last-child { border-right: none; }
+  .step-num {
+    font-family: var(--display);
+    font-size: 72px;
+    line-height: 1;
+    color: var(--border2);
+    margin-bottom: 20px;
+  }
+  .step h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+  }
+  .step p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.65;
+    font-weight: 300;
+  }
+  .step-accent { color: var(--accent); }
+
+  /* ─── DIFFERENTIATORS ───────────────────────────────────────── */
+  .diff-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+  .diff-item {
+    background: var(--bg);
+    padding: 40px;
+  }
+  .diff-item h3 {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .diff-item p {
+    font-size: 14px;
+    color: #777;
+    line-height: 1.7;
+    font-weight: 300;
+  }
+  .diff-item p strong { color: var(--text); font-weight: 500; }
+
+  /* ─── ABOUT / FOOTER ─────────────────────────────────────────── */
+  .about {
+    padding: 80px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: start;
+    border-bottom: 1px solid var(--border);
+  }
+  .about h2 {
+    font-family: var(--display);
+    font-size: 48px;
+    line-height: 0.95;
+    margin-bottom: 24px;
+    letter-spacing: 0.02em;
+  }
+  .about p {
+    font-size: 14px;
+    color: #777;
+    line-height: 1.8;
+    font-weight: 300;
+    margin-bottom: 16px;
+  }
+  .about p strong { color: var(--text); font-weight: 500; }
+  .about-links {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 32px;
+  }
+  .about-link {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 14px 20px;
+    border: 1px solid var(--border2);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .about-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .about-link .arrow { margin-left: auto; }
+
+  .tech-stack {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    margin-top: 0;
+  }
+  .tech-item {
+    background: var(--bg);
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .tech-item .tech-name { color: var(--accent); margin-bottom: 4px; }
+  .tech-item .tech-desc { color: var(--muted); font-size: 10px; line-height: 1.5; }
+
+  /* ─── FOOTER ────────────────────────────────────────────────── */
+  footer {
+    padding: 32px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  footer .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .footer-left {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .footer-right {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .footer-right a { color: var(--accent); text-decoration: none; }
+
+  /* ─── ANIMATIONS ────────────────────────────────────────────── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── RESPONSIVE ────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .steps { grid-template-columns: 1fr 1fr; }
+    .diff-grid { grid-template-columns: 1fr; }
+    .about { grid-template-columns: 1fr; gap: 40px; }
+    .stats { grid-template-columns: 1fr; }
+    .stat { border-right: none; border-bottom: 1px solid var(--border); }
+    .board-header,
+    .board-row { grid-template-columns: 70px 1fr 80px 100px; }
+    .board-row .saving { display: none; }
+    .hero h1 { font-size: 54px; }
+    .container { padding: 0 20px; }
+    .step { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <span>NTE → CDG (train) → DEL (flight) — €197 TOTAL</span>
+    <span>CHEAPER THAN GOOGLE FLIGHTS BY UP TO 40%</span>
+    <span>FLIGHTS + TRAINS + BUSES IN ONE GRAPH</span>
+    <span>3 BOOKING PLATFORMS, 1 CHEAPEST JOURNEY</span>
+    <span>KIWI · OMIO · MAKEMYTRIP · SKYSCANNER · EXPEDIA · TRAINLINE</span>
+    <span>NTE → KTW (Ryanair) → DXB (FlyDubai) → DEL (Air Arabia) — €197</span>
+    <span>SELF-TRANSFER COMBINATIONS NO SINGLE SITE WILL SHOW YOU</span>
+    <span>NTE → CDG (train) → DEL (flight) — €197 TOTAL</span>
+    <span>CHEAPER THAN GOOGLE FLIGHTS BY UP TO 40%</span>
+    <span>FLIGHTS + TRAINS + BUSES IN ONE GRAPH</span>
+    <span>3 BOOKING PLATFORMS, 1 CHEAPEST JOURNEY</span>
+    <span>KIWI · OMIO · MAKEMYTRIP · SKYSCANNER · EXPEDIA · TRAINLINE</span>
+    <span>NTE → KTW (Ryanair) → DXB (FlyDubai) → DEL (Air Arabia) — €197</span>
+    <span>SELF-TRANSFER COMBINATIONS NO SINGLE SITE WILL SHOW YOU</span>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="container">
+    <a class="logo" href="#">TRAVEL<span>_</span>FINDER</a>
+    <span class="nav-tag">École Centrale de Nantes · Pépite SNEE</span>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <p class="hero-eyebrow">▸ Multimodal Route Optimizer — v0.2</p>
+    <h1>THE <em>CHEAPEST</em><br>JOURNEY,<br>NOT JUST<br>THE CHEAPEST<br>FLIGHT.</h1>
+    <p class="hero-sub">
+      Travel Finder assembles the cheapest journey across
+      <strong>flights, trains, and buses</strong> — combining legs from different
+      carriers and booking platforms that no single site will ever show you together.
+    </p>
+
+    <!-- DEPARTURE BOARD -->
+    <div class="board">
+      <div class="board-header">
+        <span>Price</span>
+        <span>Route</span>
+        <span>Modes</span>
+        <span>Stops</span>
+        <span>Book on</span>
+      </div>
+      <div class="board-row">
+        <span class="price">€197</span>
+        <span class="route">NTE → KTW → DXB → DEL</span>
+        <span class="mode">flight × 2</span>
+        <span>2</span>
+        <span class="platform">Kiwi · Skyscanner</span>
+      </div>
+      <div class="board-row">
+        <span class="price">€204</span>
+        <span class="route">NTE → CDG → LHR → DEL</span>
+        <span class="mode">train + flight × 2</span>
+        <span>2</span>
+        <span class="platform">Omio · Expedia</span>
+      </div>
+      <div class="board-row">
+        <span class="price">€218</span>
+        <span class="route">BVA → CRL → FRA → DEL</span>
+        <span class="mode">bus + flight × 2</span>
+        <span>2</span>
+        <span class="platform">Omio · MakeMyTrip</span>
+      </div>
+      <div class="board-row">
+        <span class="price" style="color:#555;text-decoration:line-through">€340</span>
+        <span class="route" style="color:#444">NTE → CDG → DEL</span>
+        <span class="mode" style="color:#333">flight × 2</span>
+        <span style="color:#333">1</span>
+        <span class="saving">Google Flights</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat">
+    <div class="stat-num">6<span>+</span></div>
+    <div class="stat-label">booking platforms compared per leg</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">3<span>×</span></div>
+    <div class="stat-label">transport modes: flights, trains, buses</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">40<span>%</span></div>
+    <div class="stat-label">typical saving vs. single-platform search</div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">How it works</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h3>Parse your query</h3>
+        <p>Natural-language input processed by a <span class="step-accent">local Qwen LLM</span>. No data sent to any cloud. Extracts origin, destination, budget, and mode preferences.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h3>Expand nearby airports</h3>
+        <p>Origin expanded to every airport within <span class="step-accent">400 km</span> reachable by ground transport. Nantes becomes NTE, CDG, ORY, BVA, RNS, BOD.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h3>Search the multimodal graph</h3>
+        <p><span class="step-accent">Yen's k-shortest-paths</span> runs across a graph where every flight, train, and bus is an independent edge. Finds combinations no OTA assembles.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <h3>Per-leg platform selection</h3>
+        <p>Each leg is priced across 6 platforms. The cheapest platform wins that leg. <span class="step-accent">Three legs, three booking links</span>, one total price that beats everything.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIFFERENTIATORS -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">What makes this different</div>
+    <div class="diff-grid">
+      <div class="diff-item">
+        <h3>Unbundled routing</h3>
+        <p>Google finds the cheapest within one booking ecosystem. We find the cheapest by assembling the <strong>best price for each leg from wherever it's cheapest</strong> — Kiwi for budget EU, MakeMyTrip for South Asia, Omio for trains.</p>
+      </div>
+      <div class="diff-item">
+        <h3>Multi-stop self-transfer</h3>
+        <p>Google caps at 1 self-transfer. We search <strong>2, 3, 4-stop combinations freely</strong>. NTE → KTW → DXB → DEL uses three carriers with no agreements between them. That route doesn't exist on any single platform.</p>
+      </div>
+      <div class="diff-item">
+        <h3>Secondary hub routing</h3>
+        <p>Katowice (KTW), Belgrade (BEG), Tbilisi (TBS), Sharjah (SHJ) — <strong>budget carrier hubs</strong> with low airport costs that make routes like NTE → KTW (€22 Ryanair) possible and visible.</p>
+      </div>
+      <div class="diff-item">
+        <h3>Explore / Anywhere mode</h3>
+        <p>Set a budget, we show every destination reachable from your city. Single-source Dijkstra across the full graph in one pass. <strong>"Where can I go this weekend for €150?"</strong> — answered instantly.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section class="section">
+  <div class="container">
+    <div class="about">
+      <div>
+        <h2>BUILT AT<br>ÉCOLE<br>CENTRALE<br>NANTES</h2>
+        <p>Travel Finder is an independent student project at <strong>École Centrale de Nantes</strong>, developed as part of the <strong>Pépite SNEE student-entrepreneur programme</strong>.</p>
+        <p>The project uses the SNCF / Navitia API to provide real European rail schedule data as part of its multimodal route engine — combining it with flight data from Amadeus and bus data from FlixBus to build a genuinely comprehensive travel search.</p>
+        <p>All processing runs locally. No user data is stored or sent to third parties beyond the booking platforms shown in results.</p>
+        <div class="about-links">
+          <a class="about-link" href="https://github.com/harryvk18/travel-finder" target="_blank">
+            <span>▸ GITHUB REPOSITORY</span>
+            <span class="arrow">↗</span>
+          </a>
+          <a class="about-link" href="mailto:harshil.batra@eleves.ec-nantes.fr">
+            <span>▸ CONTACT DEVELOPER</span>
+            <span class="arrow">↗</span>
+          </a>
+        </div>
+      </div>
+      <div>
+        <div class="section-label" style="margin-bottom:24px;">Tech stack</div>
+        <div class="tech-stack">
+          <div class="tech-item">
+            <div class="tech-name">Python + FastAPI</div>
+            <div class="tech-desc">REST API backend, async-ready</div>
+          </div>
+          <div class="tech-item">
+            <div class="tech-name">NetworkX</div>
+            <div class="tech-desc">Multimodal graph, Yen's k-shortest-paths</div>
+          </div>
+          <div class="tech-item">
+            <div class="tech-name">Qwen 2.5 (Ollama)</div>
+            <div class="tech-desc">Local LLM — NL parsing + explanation</div>
+          </div>
+          <div class="tech-item">
+            <div class="tech-name">SNCF / Navitia API</div>
+            <div class="tech-desc">Real European rail schedule data</div>
+          </div>
+          <div class="tech-item">
+            <div class="tech-name">Kiwi Tequila API</div>
+            <div class="tech-desc">Flights incl. Ryanair + Wizz Air</div>
+          </div>
+          <div class="tech-item">
+            <div class="tech-name">Omio + Travelpayouts</div>
+            <div class="tech-desc">Trains, buses, affiliate commissions</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <span class="footer-left">TRAVEL_FINDER · École Centrale de Nantes · Pépite SNEE · 2026</span>
+    <span class="footer-right">Built by <a href="#">Harshil Batra</a></span>
+  </div>
+</footer>
+
+<script>
+  // Stagger-reveal sections on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.opacity = '1';
+        e.target.style.transform = 'translateY(0)';
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.section, .stats, .about').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(24px)';
+    el.style.transition = 'opacity 0.65s ease, transform 0.65s ease';
+    observer.observe(el);
+  });
+</script>
+</body>
+</html>
